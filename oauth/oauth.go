@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wgarcia4190/bookstore_oauth_go/oauth/errors"
+	"github.com/wgarcia4190/bookstore_utils_go/rest_errors"
 	"github.com/wgarcia4190/go-rest/gorest"
 )
 
@@ -49,7 +49,7 @@ func GetClientId(request *http.Request) int64 {
 	return getNumericHeader(request, headerXClientId)
 }
 
-func AuthenticateRequest(request *http.Request) *errors.RestErr {
+func AuthenticateRequest(request *http.Request) *rest_errors.RestErr {
 	if request == nil {
 		return nil
 	}
@@ -63,6 +63,9 @@ func AuthenticateRequest(request *http.Request) *errors.RestErr {
 
 	at, err := getAccessToken(accessTokenId)
 	if err != nil {
+		if err.Status == http.StatusNotFound {
+			return nil
+		}
 		return err
 	}
 
@@ -81,25 +84,25 @@ func cleanRequest(request *http.Request) {
 	request.Header.Del(headerXCallerId)
 }
 
-func getAccessToken(accessTokenId string) (*accessToken, *errors.RestErr) {
+func getAccessToken(accessTokenId string) (*accessToken, *rest_errors.RestErr) {
 	url := fmt.Sprintf("/oauth/access_token/%s", accessTokenId)
 	response, err := oauthRestClient.Get(url)
 	if err != nil || response == nil {
-		return nil, errors.NewInternalServerError("invalid client response when trying to login user")
+		return nil, rest_errors.NewInternalServerError("invalid client response when trying to login user", err)
 	}
 
 	if response.StatusCode > 299 {
-		var restErr errors.RestErr
+		var restErr rest_errors.RestErr
 
 		if err := json.Unmarshal(response.Body, &restErr); err != nil {
-			return nil, errors.NewInternalServerError("invalid error interface when trying to login user")
+			return nil, rest_errors.NewInternalServerError("invalid error interface when trying to login user", err)
 		}
 		return nil, &restErr
 	}
 
 	var at accessToken
 	if err := json.Unmarshal(response.Bytes(), &at); err != nil {
-		return nil, errors.NewInternalServerError("error when trying to unmarshal users login response", errors.NewError("json parsing error"))
+		return nil, rest_errors.NewInternalServerError("error when trying to unmarshal users login response", rest_errors.NewError("json parsing error"))
 	}
 	return &at, nil
 }
